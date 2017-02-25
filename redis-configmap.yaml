@@ -10,7 +10,7 @@ data:
   slave.conf: |
     # Apply this config only on slaves.
     # todo this should be parameterized with the actual hostname
-    slaveof redis-0 6379
+    slaveof redis-0.redis 6379
   shared.conf: |
     # Redis configuration file example.
     #
