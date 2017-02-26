@@ -1,0 +1,66 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+spec:
+  serviceName: redis-sentinel
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+      annotations:
+        pod.beta.kubernetes.io/init-containers: '[
+          {
+            "name": "init-redis",
+            "image": "library/redis:3.2",
+            "command": ["bash", "-c", "
+              set -ex\n
+              [[ `hostname` =~ -([0-9]+)$ ]] || exit 1\n
+              [[ -f /mnt/conf/sentinel.conf ]] && exit 0\n
+              # Copy appropriate conf.d files from config-map to emptyDir.\n
+              cp /mnt/config-map/sentinel.conf /mnt/conf/sentinel.conf\n
+            "],
+            "volumeMounts": [
+              {"name": "conf", "mountPath": "/mnt/conf"},
+              {"name": "config-map", "mountPath": "/mnt/config-map"}
+            ]
+          }
+        ]'
+    spec:
+      containers:
+      - name: redis-sentinel
+        command: ["redis-sentinel", "/etc/redis/sentinel.conf"]
+        image: library/redis:3.2
+        ports:
+        - name: redis-sentinel
+          containerPort: 26379
+        volumeMounts:
+        - name: conf
+          mountPath: /etc/redis
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "/usr/local/bin/redis-cli -h $(hostname) -p 26379 ping"
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+      volumes:
+      - name: config-map
+        configMap:
+          name: redis-sentinel
+  volumeClaimTemplates:
+  - metadata:
+      name: conf
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: default
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Mi
